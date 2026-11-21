@@ -1,0 +1,57 @@
+name: Build OMEGA MINI APK
+
+on:
+  push:
+    paths:
+      - 'OMEGA_MINI_PROJECT.zip'
+      - '.github/workflows/build-omega-mini.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Get repository
+        uses: actions/checkout@v4
+
+      - name: Extract OMEGA project
+        shell: bash
+        run: |
+          test -f OMEGA_MINI_PROJECT.zip
+          mkdir -p omega-mini
+          unzip -oq OMEGA_MINI_PROJECT.zip -d omega-mini
+          test -f omega-mini/app/build.gradle
+
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android API 35
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          fi
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build native APK
+        run: gradle -p omega-mini --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Publish installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: OMEGA_MINI_NATIVE_APK
+          path: omega-mini/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
